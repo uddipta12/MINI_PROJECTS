@@ -1,0 +1,344 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediStock - Pharmacy Inventory</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<aside class="sidebar">
+    <h2>💊 MediStock</h2>
+
+    <nav>
+        <button class="nav-link active" data-page="dashboard">Dashboard</button>
+        <button class="nav-link" data-page="medicines">Medicines</button>
+        <button class="nav-link" data-page="lowstock">Low Stock</button>
+        <button class="nav-link" data-page="expiry">Expiry Report</button>
+        <button class="nav-link" data-page="audit">Audit History</button>
+    </nav>
+</aside>
+
+<main class="main">
+    <header>
+        <div>
+            <h1 id="pageTitle">Pharmacy Dashboard</h1>
+            <p id="pageSubtitle">Manage your medicine inventory</p>
+        </div>
+        <span class="status">Oracle Project</span>
+    </header>
+
+    <!-- DASHBOARD -->
+    <section id="dashboard" class="page">
+        <div class="cards">
+            <div class="card">
+                <p>Total Medicines</p>
+                <h2 id="totalMedicines">4</h2>
+            </div>
+            <div class="card">
+                <p>Total Units</p>
+                <h2 id="totalUnits">170</h2>
+            </div>
+            <div class="card warning">
+                <p>Low Stock Items</p>
+                <h2 id="lowCount">2</h2>
+            </div>
+            <div class="card">
+                <p>Inventory Value</p>
+                <h2 id="inventoryValue">₹490.00</h2>
+            </div>
+        </div>
+    </section>
+
+    <!-- MEDICINES -->
+    <section id="medicines" class="page hidden">
+        <h2>All Medicines</h2>
+        <p class="description">Search and view medicine stock records.</p>
+    </section>
+
+    <!-- LOW STOCK -->
+    <section id="lowstock" class="page hidden">
+        <h2>Low Stock Report</h2>
+        <p class="description">Medicines with quantity at or below reorder level.</p>
+    </section>
+
+    <!-- EXPIRY -->
+    <section id="expiry" class="page hidden">
+        <h2>Expiry Report</h2>
+        <p class="description">Medicines expiring within the next 90 days,
+        and already expired medicines.</p>
+    </section>
+
+    <!-- AUDIT -->
+    <section id="audit" class="page hidden">
+        <h2>Stock Audit History</h2>
+        <p class="description">Sample records of previous stock changes.</p>
+    </section>
+
+    <!-- SHARED TABLE -->
+    <section class="panel">
+        <div class="panel-header">
+            <h2 id="tableTitle">Inventory Overview</h2>
+            <input id="search" type="text"
+                   placeholder="Search medicines..."
+                   oninput="renderTable()">
+        </div>
+
+        <div class="table-wrap">
+            <table id="dataTable">
+                <thead id="tableHead"></thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+
+        <p id="emptyMessage" class="empty hidden">
+            No matching records found.
+        </p>
+    </section>
+
+    <footer>
+        Pharmacy Inventory Management System | Oracle SQL and PL/SQL
+    </footer>
+</main>
+
+<script>
+    // Sample data for the front-end demonstration.
+    // Later, these records can be loaded from Oracle through an API.
+    const medicines = [
+        {
+            id: 101, name: "Paracetamol", batch: "PAR101",
+            quantity: 100, price: 2.50, expiry: "2027-12-31",
+            reorder: 20
+        },
+        {
+            id: 102, name: "Amoxicillin", batch: "AMX102",
+            quantity: 15, price: 8.00, expiry: "2027-08-30",
+            reorder: 20
+        },
+        {
+            id: 103, name: "Cetirizine", batch: "CET103",
+            quantity: 50, price: 3.00, expiry: "2028-05-31",
+            reorder: 10
+        },
+        {
+            id: 104, name: "Vitamin C", batch: "VTC104",
+            quantity: 5, price: 5.00, expiry: "2027-06-30",
+            reorder: 10
+        }
+    ];
+
+    // Demonstration audit data matching the two SQL test updates.
+    const auditLogs = [
+        {
+            id: 1, medicineId: 101, name: "Paracetamol",
+            oldQty: 100, newQty: 80, change: -20
+        },
+        {
+            id: 2, medicineId: 102, name: "Amoxicillin",
+            oldQty: 15, newQty: 25, change: 10
+        }
+    ];
+
+    let currentPage = "dashboard";
+
+    const titles = {
+        dashboard: ["Pharmacy Dashboard", "Manage your medicine inventory"],
+        medicines: ["Medicines", "View and search all medicines"],
+        lowstock: ["Low Stock Report", "Check medicines requiring restocking"],
+        expiry: ["Expiry Report", "Review expired and soon-to-expire stock"],
+        audit: ["Audit History", "Review recorded stock changes"]
+    };
+
+    function isLowStock(m) {
+        return m.quantity <= m.reorder;
+    }
+
+    function getExpiryStatus(m) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const expiry = new Date(m.expiry + "T00:00:00");
+        const days = Math.ceil((expiry - today) / 86400000);
+
+        if (days < 0) return "Expired";
+        if (days <= 90) return "Expiring Soon";
+        return "Valid";
+    }
+
+    function updateDashboard() {
+        document.getElementById("totalMedicines").textContent =
+            medicines.length;
+
+        document.getElementById("totalUnits").textContent =
+            medicines.reduce((sum, m) => sum + m.quantity, 0);
+
+        document.getElementById("lowCount").textContent =
+            medicines.filter(isLowStock).length;
+
+        const value = medicines.reduce(
+            (sum, m) => sum + m.quantity * m.price, 0
+        );
+
+        document.getElementById("inventoryValue").textContent =
+            value.toLocaleString("en-IN", {
+                style: "currency",
+                currency: "INR"
+            });
+    }
+
+    function escapeHTML(value) {
+        return String(value).replace(/[&<>"']/g, char => ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;"
+        })[char]);
+    }
+
+    function renderTable() {
+        const query = document.getElementById("search").value
+            .trim().toLowerCase();
+
+        let rows = [];
+        let headers = [];
+        let values = [];
+
+        if (currentPage === "audit") {
+            headers = [
+                "Log ID", "Medicine", "Old Quantity",
+                "New Quantity", "Change"
+            ];
+
+            rows = auditLogs.filter(log =>
+                Object.values(log).some(v =>
+                    String(v).toLowerCase().includes(query)
+                )
+            );
+
+            values = log => [
+                log.id, log.name, log.oldQty,
+                log.newQty, log.change > 0
+                    ? "+" + log.change : log.change
+            ];
+
+            document.getElementById("tableTitle").textContent =
+                "Stock Audit Records";
+
+        } else {
+            let filtered = [...medicines];
+
+            if (currentPage === "lowstock") {
+                filtered = filtered.filter(isLowStock);
+            }
+
+            if (currentPage === "expiry") {
+                filtered = filtered.filter(m =>
+                    getExpiryStatus(m) !== "Valid"
+                );
+            }
+
+            filtered = filtered.filter(m =>
+                Object.values(m).some(v =>
+                    String(v).toLowerCase().includes(query)
+                ) ||
+                getExpiryStatus(m).toLowerCase().includes(query)
+            );
+
+            rows = filtered;
+
+            if (currentPage === "expiry") {
+                headers = [
+                    "ID", "Medicine", "Batch",
+                    "Expiry Date", "Status"
+                ];
+
+                values = m => [
+                    m.id, m.name, m.batch,
+                    m.expiry, getExpiryStatus(m)
+                ];
+
+                document.getElementById("tableTitle").textContent =
+                    "Medicine Expiry Report";
+            } else {
+                headers = [
+                    "ID", "Medicine", "Batch", "Quantity",
+                    "Price", "Expiry Date", "Status"
+                ];
+
+                values = m => [
+                    m.id, m.name, m.batch, m.quantity,
+                    "₹" + m.price.toFixed(2), m.expiry,
+                    isLowStock(m) ? "Low Stock" : "In Stock"
+                ];
+
+                document.getElementById("tableTitle").textContent =
+                    currentPage === "lowstock"
+                    ? "Medicines Requiring Restock"
+                    : currentPage === "medicines"
+                    ? "All Medicines"
+                    : "Inventory Overview";
+            }
+        }
+
+        document.getElementById("tableHead").innerHTML =
+            "<tr>" + headers.map(h =>
+                `<th>${escapeHTML(h)}</th>`
+            ).join("") + "</tr>";
+
+        document.getElementById("tableBody").innerHTML =
+            rows.map(row =>
+                "<tr>" + values(row).map(value =>
+                    `<td>${escapeHTML(value)}</td>`
+                ).join("") + "</tr>"
+            ).join("");
+
+        document.getElementById("emptyMessage")
+            .classList.toggle("hidden", rows.length > 0);
+    }
+
+    function showPage(page) {
+        currentPage = page;
+
+        document.querySelectorAll(".page").forEach(section => {
+            section.classList.toggle(
+                "hidden", section.id !== page
+            );
+        });
+
+        document.querySelectorAll(".nav-link").forEach(button => {
+            button.classList.toggle(
+                "active", button.dataset.page === page
+            );
+        });
+
+        document.getElementById("pageTitle").textContent =
+            titles[page][0];
+
+        document.getElementById("pageSubtitle").textContent =
+            titles[page][1];
+
+        document.getElementById("search").value = "";
+
+        document.getElementById("search").placeholder =
+            page === "audit" ? "Search audit history..."
+            : "Search medicines...";
+
+        updateDashboard();
+        renderTable();
+    }
+
+    document.querySelectorAll(".nav-link").forEach(button => {
+        button.addEventListener("click", () => {
+            showPage(button.dataset.page);
+        });
+    });
+
+    updateDashboard();
+    showPage("dashboard");
+</script>
+
+</body>
+</html>
